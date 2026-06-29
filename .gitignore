@@ -1,0 +1,34 @@
+# OS / editor files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Logs
+*.log
+files/wgaddon.log
+
+# Temporary / backup files
+*.tmp
+*.temp
+*.bak
+*.backup
+*.old
+*.orig
+*~
+
+# Archives / release packages
+*.zip
+*.tar
+*.tar.gz
+*.rar
+
+# Local environment files
+.env
+.env.local
+
+# Composer, ha később lenne
+/vendor/
+composer.lock
