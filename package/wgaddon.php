@@ -19,8 +19,8 @@
  *
  * Author: Cseh Róbert / TavIR
  * Contact: https://www.tavir.hu/ | info@tavir.hu
- * Version: 0.2.16
- * Date: 2026-06-29
+ * Version: 0.2.22
+ * Date: 2026-08-16
  * GitHub: https://github.com/tavir/webgalamb-tavir-addon
  *
  * Note: Standalone addon administration file. It uses its own addon password and does not decode factory files.
@@ -49,7 +49,7 @@ if (function_exists('session_status')) {
 require_once WGADDON_PATH . 'wgaddon_core.php';
 
 WGAddon::install();
-WGAddon::configureRuntime();
+WGAddon::reassertRuntime();
 WGAddon::log('admin page loaded: ' . (isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : 'cli'));
 
 if (!isset($_SESSION['wgaddon_csrf'])) {
@@ -151,6 +151,11 @@ if (isset($_POST['loginpassword'])) {
 
 $loggedIn = !wgaddon_password_required() || (isset($_SESSION['wgaddon_logged_in']) && $_SESSION['wgaddon_logged_in'] === '1');
 
+function wgaddon_sensitive_actions_allowed()
+{
+    return wgaddon_password_required();
+}
+
 if ($loggedIn && WGAddon::enabled('debug_mode') && isset($_GET['wgaddon_client_log'])) {
     $event = isset($_POST['event']) ? $_POST['event'] : 'client debug';
     $details = isset($_POST['details']) ? $_POST['details'] : '';
@@ -160,6 +165,12 @@ if ($loggedIn && WGAddon::enabled('debug_mode') && isset($_GET['wgaddon_client_l
 }
 
 if ($loggedIn && isset($_GET['download_log'])) {
+    if (!wgaddon_sensitive_actions_allowed()) {
+        header('HTTP/1.1 403 Forbidden');
+        header('Content-Type: text/plain; charset=utf-8');
+        echo 'A log letöltése csak beállított addon jelszó mellett engedélyezett.';
+        exit;
+    }
     WGAddon::log('addon log download requested');
     if (function_exists('session_write_close')) {
         session_write_close();
@@ -181,6 +192,21 @@ function wgaddon_csrf_token()
 function wgaddon_valid_csrf()
 {
     return isset($_POST['wgaddon_csrf']) && hash_equals(wgaddon_csrf_token(), $_POST['wgaddon_csrf']);
+}
+
+if ($loggedIn && isset($_GET['view_log']) && !wgaddon_sensitive_actions_allowed()) {
+    unset($_GET['view_log']);
+    $logError = 'A log mutatása csak beállított addon jelszó mellett engedélyezett.';
+}
+
+if ($loggedIn && isset($_GET['check_update'])) {
+    if (isset($_GET['wgaddon_csrf']) && hash_equals(wgaddon_csrf_token(), $_GET['wgaddon_csrf'])) {
+        WGAddon::githubUpdateStatus(true);
+    } else {
+        WGAddon::log('github update check blocked: invalid csrf');
+    }
+    header('Location: ' . wgaddon_url('wgaddon.php'));
+    exit;
 }
 
 function wgaddon_sql_value($value)
@@ -256,17 +282,23 @@ function wgaddon_download_sql_backup()
 }
 
 if ($loggedIn && isset($_POST['backup_sql']) && wgaddon_valid_csrf()) {
-    WGAddon::log('sql backup requested');
-    if (function_exists('session_write_close')) {
-        session_write_close();
+    if (!wgaddon_sensitive_actions_allowed()) {
+        $saveError = 'Az SQL mentés csak beállított addon jelszó mellett engedélyezett.';
+    } else {
+        WGAddon::log('sql backup requested');
+        if (function_exists('session_write_close')) {
+            session_write_close();
+        }
+        wgaddon_download_sql_backup();
     }
-    wgaddon_download_sql_backup();
 }
 
 if ($loggedIn && isset($_POST['delete_log'])) {
     if (!wgaddon_valid_csrf()) {
         $logError = 'Érvénytelen biztonsági token. Töltsd újra az oldalt.';
         WGAddon::log('log delete blocked: invalid csrf');
+    } elseif (!wgaddon_sensitive_actions_allowed()) {
+        $logError = 'A log törlése csak beállított addon jelszó mellett engedélyezett.';
     } else {
         WGAddon::log('addon log delete requested');
         if (WGAddon::deleteLog()) {
@@ -284,15 +316,18 @@ if ($loggedIn && isset($_POST['save_settings'])) {
         $saveError = 'Érvénytelen biztonsági token. Töltsd újra az oldalt.';
         WGAddon::log('settings save blocked: invalid csrf');
     } else {
-        $keys = array('datatable_csv_export', 'tinymce_subsup', 'tinymce_image_dialog_fix', 'admin_menu_link', 'debug_mode', 'php_error_log', 'php_display_errors');
+        $keys = array('datatable_csv_export', 'tinymce_subsup', 'tinymce_image_dialog_fix', 'admin_menu_link', 'debug_mode', 'php_error_log', 'php_display_errors', 'github_update_check');
         foreach (WGAddon::tinymceButtons() as $button) {
             $keys[] = 'tinymce_btn_' . $button['key'];
         }
         foreach ($keys as $key) {
             WGAddon::set($key, isset($_POST[$key]) ? '1' : '0');
         }
+        if (isset($_POST['php_display_errors'])) {
+            WGAddon::set('php_error_log', '1');
+        }
         WGAddon::set('php_error_level', isset($_POST['php_error_level']) && $_POST['php_error_level'] === 'warnings' ? 'warnings' : 'all');
-        WGAddon::configureRuntime();
+        WGAddon::reassertRuntime();
         WGAddon::log('settings saved');
         $saved = true;
     }
@@ -309,6 +344,7 @@ function wgaddon_selected($key, $value)
 }
 
 $wgaddonAdminUrl = wgaddon_url('wgaddon.php');
+$githubStatus = $loggedIn ? WGAddon::githubUpdateStatus(false) : null;
 ?><!DOCTYPE html>
 <html lang="hu">
 <head>
@@ -345,10 +381,10 @@ $wgaddonAdminUrl = wgaddon_url('wgaddon.php');
 </head>
 <body>
 <?php if (WGAddon::enabled('debug_mode')) { ?>
-<!-- WGADDON-ADMIN-DEBUG active=1 version=0.2.16 log=files/wgaddon.log error_log=<?php echo WGAddon::enabled('php_error_log') ? '1' : '0'; ?> display_errors=<?php echo WGAddon::enabled('php_display_errors') ? '1' : '0'; ?> error_level=<?php echo wgaddon_h(WGAddon::get('php_error_level', 'all')); ?> -->
+<!-- WGADDON-ADMIN-DEBUG active=1 version=<?php echo wgaddon_h(WGAddon::version()); ?> log=files/wgaddon.log error_log=<?php echo WGAddon::enabled('php_error_log') ? '1' : '0'; ?> display_errors=<?php echo WGAddon::enabled('php_display_errors') ? '1' : '0'; ?> error_level=<?php echo wgaddon_h(WGAddon::get('php_error_level', 'all')); ?> -->
 <?php } ?>
     <div class="wgaddon-box">
-        <h1 class="wgaddon-title text-center">TavIR Webgalamb Addon <small>0.2.16</small></h1>
+        <h1 class="wgaddon-title text-center">TavIR Webgalamb Addon <small><?php echo wgaddon_h(WGAddon::version()); ?></small></h1>
         <p class="text-center text-muted">Nem hivatalos, független addon Webgalamb 8 rendszerhez.</p>
 
         <?php if (!$loggedIn) { ?>
@@ -364,6 +400,11 @@ $wgaddonAdminUrl = wgaddon_url('wgaddon.php');
                 <a href="<?php echo wgaddon_h(wgaddon_url('wg8.php')); ?>" class="btn btn-secondary">Tovább a Webgalambhoz</a>
             </form>
         <?php } else { ?>
+            <?php if (!wgaddon_sensitive_actions_allowed()) { ?>
+                <div class="alert alert-warning mt-3">
+                    Biztonsági figyelmeztetés: nincs beállítva addon jelszó. Az admin felület megnyílik, de az SQL mentés, a log mutatása, letöltése és törlése tiltva van.
+                </div>
+            <?php } ?>
             <?php if (!WGAddon::dbAvailable()) { ?>
                 <div class="alert alert-danger mt-3">
                     Addon adatbázis hiba: <?php echo wgaddon_h(WGAddon::dbError()); ?>
@@ -387,6 +428,14 @@ $wgaddonAdminUrl = wgaddon_url('wgaddon.php');
                     <?php if (WGAddon::enabled('php_display_errors')) { ?>
                         A PHP hibák képernyőre írása is aktív, ezt éles használat után kapcsold ki.
                     <?php } ?>
+                </div>
+            <?php } ?>
+            <?php if (!empty($githubStatus) && !empty($githubStatus['update_available'])) { ?>
+                <div class="alert alert-warning mt-3">
+                    Új TavIR Webgalamb Addon kiadás érhető el a GitHubon.
+                    Éles verzió: <strong><?php echo wgaddon_h($githubStatus['current']); ?></strong>,
+                    GitHub verzió: <strong><?php echo wgaddon_h($githubStatus['latest']); ?></strong>.
+                    <a href="<?php echo wgaddon_h($githubStatus['latest_url']); ?>" target="_blank" rel="noopener">Kiadás megnyitása</a>
                 </div>
             <?php } ?>
 
@@ -487,7 +536,7 @@ $wgaddonAdminUrl = wgaddon_url('wgaddon.php');
 
                         <div class="custom-control custom-checkbox mb-3">
                             <input type="checkbox" class="custom-control-input" id="php_error_log" name="php_error_log"<?php wgaddon_checked('php_error_log'); ?>>
-                            <label class="custom-control-label" for="php_error_log">PHP error log engedélyezése a files/wgaddon.log fájlba</label>
+                            <label class="custom-control-label" for="php_error_log">PHP hibák fájlba naplózása a files/wgaddon.log állományba</label>
                         </div>
 
                         <div class="form-group">
@@ -500,8 +549,35 @@ $wgaddonAdminUrl = wgaddon_url('wgaddon.php');
 
                         <div class="custom-control custom-checkbox">
                             <input type="checkbox" class="custom-control-input" id="php_display_errors" name="php_display_errors"<?php wgaddon_checked('php_display_errors'); ?>>
-                            <label class="custom-control-label" for="php_display_errors">PHP hibák képernyőre írása is legyen aktív debug idejére</label>
+                            <label class="custom-control-label" for="php_display_errors">PHP hibák képernyőre írása is legyen aktív debug idejére; a fájlba naplózást automatikusan bekapcsolja</label>
                         </div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header">GitHub verzióellenőrzés</div>
+                    <div class="card-body">
+                        <div class="custom-control custom-checkbox mb-3">
+                            <input type="checkbox" class="custom-control-input" id="github_update_check" name="github_update_check"<?php wgaddon_checked('github_update_check'); ?>>
+                            <label class="custom-control-label" for="github_update_check">GitHub kiadás ellenőrzése az admin felületen</label>
+                        </div>
+                        <p class="small text-muted">
+                            Az ellenőrzés a GitHub hivatalos release API-ját hívja fix URL-en. Webgalamb adatot, listát, levelet vagy adatbázisadatot nem küld.
+                        </p>
+                        <?php if (!empty($githubStatus)) { ?>
+                            <p class="small mb-2">
+                                Éles verzió: <strong><?php echo wgaddon_h($githubStatus['current']); ?></strong>
+                                | GitHub verzió:
+                                <strong><?php echo $githubStatus['latest'] !== '' ? wgaddon_h($githubStatus['latest']) : 'még nincs ellenőrizve'; ?></strong>
+                                | Utolsó ellenőrzés:
+                                <strong><?php echo $githubStatus['checked_at'] !== '' ? wgaddon_h($githubStatus['checked_at']) : 'nincs'; ?></strong>
+                            </p>
+                            <?php if (!empty($githubStatus['error'])) { ?>
+                                <div class="alert alert-warning small mb-2"><?php echo wgaddon_h($githubStatus['error']); ?></div>
+                            <?php } ?>
+                        <?php } ?>
+                        <a href="<?php echo wgaddon_h(wgaddon_url('wgaddon.php', 'check_update=1&wgaddon_csrf=' . urlencode(wgaddon_csrf_token()))); ?>" class="btn btn-secondary">Ellenőrzés most</a>
+                        <a href="<?php echo wgaddon_h(WGAddon::githubReleasesUrl()); ?>" target="_blank" rel="noopener" class="btn btn-secondary">GitHub kiadások</a>
                     </div>
                 </div>
 
@@ -514,10 +590,14 @@ $wgaddonAdminUrl = wgaddon_url('wgaddon.php');
                 <div class="card-header">SQL mentés</div>
                 <div class="card-body">
                     <p class="small text-muted">Különálló adatbázis mentési funkció. Telepítés vagy nagyobb módosítás előtt teljes mentéshez használható.</p>
-                    <form method="post" action="<?php echo wgaddon_h($wgaddonAdminUrl); ?>">
-                        <input type="hidden" name="wgaddon_csrf" value="<?php echo wgaddon_h(wgaddon_csrf_token()); ?>">
-                        <button type="submit" name="backup_sql" value="1" class="btn btn-secondary">SQL mentés</button>
-                    </form>
+                    <?php if (wgaddon_sensitive_actions_allowed()) { ?>
+                        <form method="post" action="<?php echo wgaddon_h($wgaddonAdminUrl); ?>">
+                            <input type="hidden" name="wgaddon_csrf" value="<?php echo wgaddon_h(wgaddon_csrf_token()); ?>">
+                            <button type="submit" name="backup_sql" value="1" class="btn btn-secondary">SQL mentés</button>
+                        </form>
+                    <?php } else { ?>
+                        <div class="alert alert-warning mb-0">Az SQL mentés csak akkor aktív, ha a files/wg8conf.php fájlban be van állítva a WGADDON_PASSWORD.</div>
+                    <?php } ?>
                 </div>
             </div>
 
@@ -533,12 +613,14 @@ $wgaddonAdminUrl = wgaddon_url('wgaddon.php');
                         <?php echo $logInfo['writable_dir'] ? 'igen' : 'nem'; ?>
                     </p>
                     <div class="wgaddon-inline-actions">
-                        <a href="<?php echo wgaddon_h(wgaddon_url('wgaddon.php', 'view_log=1#wgaddon-log-view')); ?>" class="btn btn-secondary">Log megnyitása</a>
-                        <a href="<?php echo wgaddon_h(wgaddon_url('wgaddon.php', 'download_log=1')); ?>" class="btn btn-secondary">Log letöltése</a>
-                        <form method="post" action="<?php echo wgaddon_h($wgaddonAdminUrl); ?>">
-                            <input type="hidden" name="wgaddon_csrf" value="<?php echo wgaddon_h(wgaddon_csrf_token()); ?>">
-                            <button type="submit" name="delete_log" value="1" class="btn btn-danger" onclick="return confirm('Biztosan törlöd a files/wgaddon.log fájlt?');">Log törlése</button>
-                        </form>
+                        <?php if (wgaddon_sensitive_actions_allowed()) { ?>
+                            <a href="<?php echo wgaddon_h(wgaddon_url('wgaddon.php', 'view_log=1#wgaddon-log-view')); ?>" class="btn btn-secondary">Log mutatása</a>
+                            <a href="<?php echo wgaddon_h(wgaddon_url('wgaddon.php', 'download_log=1')); ?>" class="btn btn-secondary">Log letöltése</a>
+                            <form method="post" action="<?php echo wgaddon_h($wgaddonAdminUrl); ?>">
+                                <input type="hidden" name="wgaddon_csrf" value="<?php echo wgaddon_h(wgaddon_csrf_token()); ?>">
+                                <button type="submit" name="delete_log" value="1" class="btn btn-danger" onclick="return confirm('Biztosan törlöd a files/wgaddon.log fájlt?');">Log törlése</button>
+                            </form>
+                        <?php } ?>
                     </div>
                 </div>
             </div>

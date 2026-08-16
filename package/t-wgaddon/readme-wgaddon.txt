@@ -3,8 +3,8 @@
 
 Készítő: Cseh Róbert / TavIR
 Kapcsolat: https://www.tavir.hu/ | info@tavir.hu
-Verzió: 0.2.16
-Dátum: 2026-06-29
+Verzió: 0.2.22
+Dátum: 2026-08-16
 GitHub: https://github.com/tavir/webgalamb-tavir-addon
 Fejlesztői környezet: CODEX - ChatGPT 5.5 magas (Plus előfizetés)
 Tesztelt Webgalamb verzió: 8.1.0
@@ -117,7 +117,7 @@ A nyitott wg8conf.php fájl VÉGÉRE kell bemásolni folytatólagosan a --cut--/
 
 define("WGADDON_PASSWORD", '');
 
-/* WGADDON-SHUTDOWN-HOOK 0.2.16 */
+/* WGADDON-SHUTDOWN-HOOK 0.2.22 */
 if (!defined('WGADDON_ADMIN_BOOT')) {
     if (!defined('WG_PATH')) {
         define('WG_PATH', dirname(__DIR__) . DIRECTORY_SEPARATOR);
@@ -198,7 +198,8 @@ A CSV export addon oldali, böngészőben fut. A látható táblázatos listákh
 
 Debug log: <WEBGALAMB>/files/wgaddon.log. Minden addon debug bejegyzés egy soros JSON. A jelszó, psw/pwd, token és CSRF mezők [hidden] jelölést kapnak.
 A PHP hibanaplózás szintje választható: minden PHP hiba/notice/warning/deprecated, vagy csak warning/error jellegű hibák.
-A PHP hibák képernyőre írását csak hibakeresés idejére javasolt bekapcsolni. Ilyenkor az addon saját hiba blokkot is kiír, és a hibát a files/wgaddon.log fájlba naplózza. Éles használatnál kapcsold ki.
+A PHP hibák fájlba naplózása és képernyőre írása külön funkció. A képernyős kiírást csak hibakeresés idejére javasolt bekapcsolni. A képernyős kiírás bekapcsolása automatikusan bekapcsolja a files/wgaddon.log fájlba naplózást is. Ha a képernyős kiírást kikapcsolod, a fájlba naplózás tovább működik, amíg a PHP hibák fájlba naplózása pipa bekapcsolva marad.
+A GitHub verzióellenőrzés a https://api.github.com/repos/tavir/webgalamb-tavir-addon/releases/latest fix címet hívja meg. Nem küld Webgalamb listát, levelet, adatbázisadatot vagy belépési adatot. A funkció az admin felületen kikapcsolható, és a válasz gyorsítótárazva kerül mentésre.
 A debug alsó sáv alapértelmezetten nem látszik; csak bekapcsolt debug mellett jelenik meg, és a bezárás után az adott böngésző munkamenetben zárva marad.
 
 11. Biztonsági ellenőrzés
@@ -208,6 +209,21 @@ A saját addon fájlokban ellenőrizve: nincs DROP, DELETE SQL, TRUNCATE, ALTER,
 
 12. Változások
 --------------
+
+0.2.22 - 2026-08-16
+- Javítva: a frontend injektáló nem hívja meg az admin felülethez tartozó wgaddon_h() segédfüggvényt.
+- A hiba miatt a wgaddon bekötés aktiválódott, de debug módban a frontend injektálás fatal errorral megszakadhatott.
+- A 0.2.16-ból visszahozott CSV export kód változatlan maradt.
+
+0.2.21 - 2026-08-16
+- A csomag a 0.2.16 állományaira épült újra; a 0.2.17-0.2.20 állományok nem voltak változásreferenciák.
+- A 0.2.16 CSV export kódja változatlan maradt.
+- A "Log megnyitása" admin gomb szövege "Log mutatása" lett.
+- A PHP képernyős hibakiírás bekapcsolása automatikusan bekapcsolja a files/wgaddon.log fájlba naplózást.
+- A PHP hibakezelés reassert módban újra beállítja az error_reporting, log_errors, display_errors és error_log értékeket.
+- Az SQL mentés és a log mutatása/letöltése/törlése csak beállított WGADDON_PASSWORD mellett engedélyezett.
+- GitHub verzióellenőrzés került az admin felületre, gyorsítótárazott és időkorlátos lekéréssel.
+- A kézi GitHub ellenőrzés CSRF tokenhez kötött.
 
 0.2.16 - 2026-06-29
 - A belépőoldalról kikerült a konfigurációs jelszómagyarázat.

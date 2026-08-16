@@ -19,8 +19,8 @@
  *
  * Author: Cseh Róbert / TavIR
  * Contact: https://www.tavir.hu/ | info@tavir.hu
- * Version: 0.2.16
- * Date: 2026-06-29
+ * Version: 0.2.22
+ * Date: 2026-08-16
  * GitHub: https://github.com/tavir/webgalamb-tavir-addon
  *
  * Note: Addon loader registered from the open configuration file to avoid editing encoded factory files internally.
@@ -54,6 +54,7 @@ if (is_file(WGADDON_PATH . 'wgaddon_core.php')) {
     include_once WGADDON_PATH . 'wgaddon_core.php';
     if (class_exists('WGAddon')) {
         WGAddon::dbAvailable();
+        WGAddon::reassertRuntime();
     }
 }
 

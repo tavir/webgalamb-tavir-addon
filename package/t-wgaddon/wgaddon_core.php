@@ -19,8 +19,8 @@
  *
  * Author: Cseh Róbert / TavIR
  * Contact: https://www.tavir.hu/ | info@tavir.hu
- * Version: 0.2.16
- * Date: 2026-06-29
+ * Version: 0.2.22
+ * Date: 2026-08-16
  * GitHub: https://github.com/tavir/webgalamb-tavir-addon
  *
  * Note: Own settings component. It creates and uses only the addon settings table.
@@ -38,11 +38,17 @@ if (isset($_SERVER['SCRIPT_FILENAME']) && realpath($_SERVER['SCRIPT_FILENAME']) 
 
 class WGAddon
 {
+    const VERSION = '0.2.22';
+    const GITHUB_RELEASE_API = 'https://api.github.com/repos/tavir/webgalamb-tavir-addon/releases/latest';
+    const GITHUB_RELEASES_URL = 'https://github.com/tavir/webgalamb-tavir-addon/releases';
+    const UPDATE_CHECK_TTL = 21600;
+
     protected static $dbAvailable = null;
     protected static $dbError = '';
     protected static $dbMode = '';
     protected static $dbLink = null;
     protected static $phpShutdownRegistered = false;
+    protected static $runtimeErrorMask = 0;
 
     public static function table()
     {
@@ -168,6 +174,7 @@ class WGAddon
         self::defaultValue('php_error_log', '0');
         self::defaultValue('php_display_errors', '0');
         self::defaultValue('php_error_level', 'all');
+        self::defaultValue('github_update_check', '1');
 
         foreach (self::tinymceButtons() as $button) {
             self::defaultValue('tinymce_btn_' . $button['key'], !empty($button['default']) ? '1' : '0');
@@ -213,6 +220,16 @@ class WGAddon
         return self::get($key, '0') == '1';
     }
 
+    public static function version()
+    {
+        return self::VERSION;
+    }
+
+    public static function githubReleasesUrl()
+    {
+        return self::GITHUB_RELEASES_URL;
+    }
+
     public static function set($key, $value)
     {
         self::ensureDbConnection();
@@ -232,15 +249,142 @@ class WGAddon
         return WG_PATH . 'files/wgaddon.log';
     }
 
-    public static function configureRuntime()
+    public static function githubUpdateStatus($force = false)
+    {
+        $status = array(
+            'enabled' => self::enabled('github_update_check'),
+            'current' => self::VERSION,
+            'latest' => self::get('github_latest_version', ''),
+            'latest_url' => self::get('github_latest_url', self::GITHUB_RELEASES_URL),
+            'checked_at' => self::get('github_checked_at', ''),
+            'error' => self::get('github_check_error', ''),
+            'update_available' => false
+        );
+
+        if (!$status['enabled']) {
+            return $status;
+        }
+
+        $last = (int)self::get('github_checked_ts', '0');
+        if (!$force && $last > 0 && (time() - $last) < self::UPDATE_CHECK_TTL) {
+            $status['update_available'] = self::isNewerVersion($status['latest'], self::VERSION);
+            return $status;
+        }
+
+        $remote = self::fetchLatestGithubRelease();
+        $checkedAt = date('Y-m-d H:i:s');
+        self::set('github_checked_ts', (string)time());
+        self::set('github_checked_at', $checkedAt);
+        $status['checked_at'] = $checkedAt;
+
+        if (!empty($remote['error'])) {
+            self::set('github_check_error', $remote['error']);
+            $status['error'] = $remote['error'];
+            self::log('github update check failed', array('error' => $remote['error']));
+            return $status;
+        }
+
+        self::set('github_latest_version', $remote['version']);
+        self::set('github_latest_url', $remote['url']);
+        self::set('github_check_error', '');
+
+        $status['latest'] = $remote['version'];
+        $status['latest_url'] = $remote['url'];
+        $status['error'] = '';
+        $status['update_available'] = self::isNewerVersion($remote['version'], self::VERSION);
+        self::log('github update check completed', array(
+            'current' => self::VERSION,
+            'latest' => $remote['version'],
+            'update_available' => $status['update_available'] ? '1' : '0'
+        ));
+        return $status;
+    }
+
+    protected static function fetchLatestGithubRelease()
+    {
+        if (!ini_get('allow_url_fopen')) {
+            return array('error' => 'A szerveren az allow_url_fopen tiltott, ezért a GitHub verzióellenőrzés nem futtatható.');
+        }
+
+        $context = stream_context_create(array(
+            'http' => array(
+                'method' => 'GET',
+                'header' => "User-Agent: TavIR-WGAddon/" . self::VERSION . "\r\nAccept: application/vnd.github+json\r\n",
+                'timeout' => 3,
+                'ignore_errors' => true
+            )
+        ));
+        $json = @file_get_contents(self::GITHUB_RELEASE_API, false, $context);
+        if ($json === false || $json === '') {
+            return array('error' => 'A GitHub verzióellenőrzés nem kapott választ.');
+        }
+
+        $data = json_decode($json, true);
+        if (!is_array($data)) {
+            return array('error' => 'A GitHub verzióellenőrzés nem értelmezhető választ kapott.');
+        }
+
+        $tag = isset($data['tag_name']) ? trim((string)$data['tag_name']) : '';
+        if ($tag === '' && isset($data['name'])) {
+            $tag = trim((string)$data['name']);
+        }
+        if ($tag === '') {
+            return array('error' => 'A GitHub kiadás válaszában nincs verziószám.');
+        }
+
+        return array(
+            'version' => self::normalizeVersion($tag),
+            'url' => isset($data['html_url']) && $data['html_url'] !== '' ? (string)$data['html_url'] : self::GITHUB_RELEASES_URL
+        );
+    }
+
+    protected static function normalizeVersion($version)
+    {
+        return ltrim(trim((string)$version), "vV \t\n\r\0\x0B");
+    }
+
+    protected static function isNewerVersion($latest, $current)
+    {
+        $latest = self::normalizeVersion($latest);
+        $current = self::normalizeVersion($current);
+        if ($latest === '') {
+            return false;
+        }
+        return version_compare($latest, $current, '>');
+    }
+
+    public static function configureRuntime($force = false)
     {
         if (self::enabled('php_error_log') || self::enabled('debug_mode') || self::enabled('php_display_errors')) {
-            error_reporting(self::errorReportingLevel());
+            $level = self::errorReportingLevel();
+            $previousReporting = error_reporting();
+            $previousLogErrors = ini_get('log_errors');
+            $previousErrorLog = ini_get('error_log');
+
+            error_reporting($level);
             ini_set('log_errors', '1');
             ini_set('display_errors', self::enabled('php_display_errors') ? '1' : '0');
             ini_set('error_log', self::logFile());
-            set_error_handler(array('WGAddon', 'handlePhpError'), self::errorReportingLevel());
+            set_error_handler(array('WGAddon', 'handlePhpError'), $level);
+            self::$runtimeErrorMask = $level;
             self::registerPhpErrorShutdown();
+
+            if ($force || $previousReporting !== $level || $previousLogErrors != '1' || $previousErrorLog !== self::logFile()) {
+                self::forceLog('php runtime configured', array(
+                    'previous_error_reporting' => $previousReporting,
+                    'new_error_reporting' => $level,
+                    'previous_log_errors' => $previousLogErrors,
+                    'previous_error_log' => $previousErrorLog,
+                    'new_error_log' => self::shortPath(self::logFile())
+                ));
+            }
+        }
+    }
+
+    public static function reassertRuntime()
+    {
+        if (self::enabled('php_error_log') || self::enabled('debug_mode') || self::enabled('php_display_errors')) {
+            self::configureRuntime(true);
         }
     }
 
@@ -254,7 +398,8 @@ class WGAddon
 
     public static function handlePhpError($severity, $message, $file, $line)
     {
-        if (!(error_reporting() & $severity)) {
+        $configuredMask = self::$runtimeErrorMask ? self::$runtimeErrorMask : self::errorReportingLevel();
+        if (!($configuredMask & $severity)) {
             return false;
         }
 

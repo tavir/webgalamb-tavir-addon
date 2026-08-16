@@ -1,5 +1,35 @@
 ﻿# Changelog / Valtozasnaplo
+## 0.2.22 - 2026-08-16
 
+- Fixed: the frontend injector no longer calls the admin-only `wgaddon_h()` helper function.
+- The hook was active, but in debug mode frontend injection could stop with a fatal error.
+- The CSV export code restored from 0.2.16 remains unchanged.
+
+## Magyar
+
+- Javítva: a frontend injektáló nem hívja meg az admin felülethez tartozó `wgaddon_h()` segédfüggvényt.
+- A wgaddon bekötés aktiválódott, de debug módban a frontend injektálás fatal errorral megszakadhatott.
+- A 0.2.16-ból visszahozott CSV export kód változatlan maradt.
+
+## 0.2.21 - 2026-08-16
+
+- Rebuilt from the 0.2.16 package as the baseline; versions 0.2.17-0.2.20 were not used as change references.
+- Kept the 0.2.16 CSV export implementation unchanged.
+- Renamed the admin log action from "Log megnyitása" to "Log mutatása".
+- Enabling PHP error display now automatically enables PHP error file logging.
+- Added runtime reassertion for PHP error reporting/logging settings.
+- SQL backup and log view/download/delete are available only when `WGADDON_PASSWORD` is configured.
+- Added cached GitHub latest-release checking with CSRF protection for manual checks.
+
+## Magyar
+
+- A csomag a 0.2.16 kiadásból épült újra; a 0.2.17-0.2.20 állományok nem voltak változásreferenciák.
+- A 0.2.16 CSV export megoldása változatlan maradt.
+- A "Log megnyitása" admin gomb szövege "Log mutatása" lett.
+- A PHP képernyős hibakiírás bekapcsolása automatikusan bekapcsolja a fájlba naplózást.
+- A PHP hibakezelés reassert módban újra beállítja a futási hibanaplózási beállításokat.
+- Az SQL mentés és a log mutatása/letöltése/törlése csak beállított `WGADDON_PASSWORD` mellett engedélyezett.
+- Gyorsítótárazott GitHub kiadásellenőrzés került be, kézi ellenőrzésnél CSRF védelemmel.
 ## 0.2.16 - 2026-06-29
 
 - Removed the configuration hint from the login page.
@@ -55,6 +85,7 @@
 - A `LICENSE` fajlba bekerult a teljes GPL-3.0 licencszoveg.
 - Az addon PHP fajlok megkaptak a `GPL-3.0-only` SPDX azonositot.
 - Pontosabb Webgalamb, TinyMCE es konfiguracios hook megfogalmazasok.
+
 
 
 

@@ -19,8 +19,8 @@
  *
  * Author: Cseh Róbert / TavIR
  * Contact: https://www.tavir.hu/ | info@tavir.hu
- * Version: 0.2.16
- * Date: 2026-06-29
+ * Version: 0.2.22
+ * Date: 2026-08-16
  * GitHub: https://github.com/tavir/webgalamb-tavir-addon
  *
  * Note: Optional frontend additions loaded according to the addon admin settings.
@@ -53,9 +53,9 @@ if ($wgaddonBaseUrl == '/') {
 $wgaddonAdminUrl = $wgaddonBaseUrl . '/wgaddon.php';
 WGAddon::log('frontend inject loaded: ' . (isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : 'unknown'));
 ?>
-<!-- WGADDON-INJECT-LOADED 0.2.16 -->
+<!-- WGADDON-INJECT-LOADED 0.2.22 -->
 <?php if ($wgaddonDebug) { ?>
-<!-- WGADDON-DEBUG active=1 version=0.2.16 csv=<?php echo $wgaddonCsv ? '1' : '0'; ?> tinymce_toolbar=<?php echo $wgaddonTinyToolbar ? '1' : '0'; ?> tiny_buttons=<?php echo count($wgaddonTinyButtons); ?> image_fix=<?php echo $wgaddonImageDialogFix ? '1' : '0'; ?> admin_menu=<?php echo $wgaddonAdminMenu ? '1' : '0'; ?> log=files/wgaddon.log -->
+<!-- WGADDON-DEBUG active=1 version=<?php echo htmlspecialchars(WGAddon::version(), ENT_QUOTES, 'UTF-8'); ?> csv=<?php echo $wgaddonCsv ? '1' : '0'; ?> tinymce_toolbar=<?php echo $wgaddonTinyToolbar ? '1' : '0'; ?> tiny_buttons=<?php echo count($wgaddonTinyButtons); ?> image_fix=<?php echo $wgaddonImageDialogFix ? '1' : '0'; ?> admin_menu=<?php echo $wgaddonAdminMenu ? '1' : '0'; ?> log=files/wgaddon.log -->
 <?php } ?>
 <?php if ($wgaddonImageDialogFix || $wgaddonTinyToolbar || $wgaddonCsv || $wgaddonDebug) { ?>
 <style>
