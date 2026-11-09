@@ -199,10 +199,10 @@ A Webgalamb főkönyvtárában csak a `wgaddon.php` marad közvetlenül. Az addo
 
 ## Tesztelt környezet
 
-A csomag dokumentációja szerint a tesztelt Webgalamb verzió:
+A tesztelt Webgalamb verzió:
 
 ```text
-Webgalamb 8+ v8.0.3
+Webgalamb 8+ v8.1.0
 ```
 
 Más Webgalamb 8 / 8+ verziókon a működés külön ellenőrzést igényel.
@@ -241,7 +241,7 @@ A csomag nem módosítja a `wg8.php` vagy `tinymce_config.php` fájlt, és nem d
 
 ### Használható Webgalamb 8.5.0-val?
 
-A csomag dokumentáltan Webgalamb 8+ v8.0.3 alatt lett tesztelve. Más verziókon, így 8.5.0 esetén is külön kompatibilitási ellenőrzés szükséges.
+A csomag dokumentáltan Webgalamb 8+ v8.1.0 alatt lett tesztelve. Más verziókon, így 8.5.0 esetén is külön kompatibilitási ellenőrzés szükséges. A kiadáskor a 8.5.0 még nem érhető el.
 
 ### Ez WordPress plugin vagy webshop-integráció?
 
